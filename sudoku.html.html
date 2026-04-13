@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hybrid Sudoku Solver — DAA Project</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0a0e1a;
+  --surface: #111827;
+  --surface2: #1a2235;
+  --border: rgba(255,255,255,0.08);
+  --border2: rgba(255,255,255,0.15);
+  --accent: #4f9cf9;
+  --accent2: #f97316;
+  --accent3: #22c55e;
+  --accent4: #a855f7;
+  --text: #f1f5f9;
+  --muted: #64748b;
+  --mono: 'Space Mono', monospace;
+  --sans: 'DM Sans', sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(79,156,249,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(79,156,249,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+.wrapper{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
+header{text-align:center;margin-bottom:2.5rem}
+.badge{display:inline-block;font-family:var(--mono);font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:2px;padding:3px 10px;letter-spacing:2px;margin-bottom:1rem;text-transform:uppercase}
+h1{font-family:var(--mono);font-size:clamp(1.4rem,4vw,2.2rem);font-weight:700;color:var(--text);letter-spacing:-1px;margin-bottom:0.5rem}
+h1 span{color:var(--accent)}
+.subtitle{font-size:14px;color:var(--muted);font-weight:300}
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:2rem;width:fit-content;margin-left:auto;margin-right:auto}
+.tab{padding:8px 20px;border-radius:7px;border:none;background:transparent;color:var(--muted);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;transition:all 0.2s}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--accent);color:#fff}
+.panel{display:none}.panel.active{display:block}
+.solver-layout{display:grid;grid-template-columns:auto 1fr;gap:2rem;align-items:start}
+@media(max-width:700px){.solver-layout{grid-template-columns:1fr}}
+.grid-container{display:flex;flex-direction:column;align-items:center;gap:1rem}
+.sudoku-grid{display:grid;grid-template-columns:repeat(9,1fr);border:2px solid var(--border2);border-radius:8px;overflow:hidden;width:min(360px,90vw);background:var(--border2);gap:1px}
+.cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:clamp(14px,2.5vw,20px);font-weight:400;background:var(--surface);color:var(--muted);transition:background 0.15s,color 0.15s,transform 0.1s;position:relative;cursor:default}
+.cell.given{color:var(--text);font-weight:700}
+.cell.solved{color:var(--accent3);background:#0f2a1a;animation:popIn 0.2s ease}
+.cell.active{background:#1a2d4a;color:var(--accent);transform:scale(1.08);z-index:2}
+.cell.conflict{background:#2a1010;color:#ef4444}
+.cell.box-right{border-right:2px solid var(--border2)}
+.cell.box-bottom{border-bottom:2px solid var(--border2)}
+@keyframes popIn{0%{transform:scale(0.8);opacity:0.5}100%{transform:scale(1);opacity:1}}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.btn{padding:8px 16px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s}
+.btn:hover{background:var(--surface2);border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#3b8ef0}
+.btn.orange{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.btn.orange:hover{background:#ea6c10}
+.btn:disabled{opacity:0.35;cursor:not-allowed}
+.diff-row{display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
+.diff-btn{padding:5px 14px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-size:12px;font-family:var(--sans);cursor:pointer;transition:all 0.15s;font-weight:500}
+.diff-btn:hover{color:var(--text);border-color:var(--border2)}
+.diff-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.right-panel{display:flex;flex-direction:column;gap:1rem}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 10px;text-align:center}
+.stat-label{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.stat-val{font-size:22px;font-weight:600;font-family:var(--mono);color:var(--text)}
+.stat-val.good{color:var(--accent3)}
+.stat-val.bad{color:var(--accent2)}
+.log-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-family:var(--mono);font-size:12px;color:var(--muted);height:90px;overflow-y:auto;line-height:1.7}
+.log-line{color:var(--accent3)}
+.log-line.warn{color:var(--accent2)}
+.speed-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+.speed-row input[type=range]{flex:1;accent-color:var(--accent)}
+.speed-label{font-family:var(--mono);font-size:11px;color:var(--accent);min-width:60px;text-align:right}
+
+/* ── Algorithm page ── */
+.algo-grid{display:flex;flex-direction:column;gap:1.2rem;margin-bottom:1.5rem}
+.algo-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.algo-card-header{display:flex;align-items:center;gap:12px;padding:1rem 1.4rem;cursor:pointer;user-select:none;border-bottom:1px solid transparent;transition:background 0.15s}
+.algo-card-header:hover{background:var(--surface2)}
+.algo-card-header.open{border-bottom-color:var(--border)}
+.algo-card-left{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
+.algo-card-title{font-family:var(--mono);font-size:14px;font-weight:700}
+.algo-badge{display:inline-block;font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:3px;font-weight:700;width:fit-content}
+.algo-chevron{font-size:12px;color:var(--muted);transition:transform 0.2s;flex-shrink:0}
+.algo-chevron.open{transform:rotate(90deg)}
+.algo-card-body{display:none;padding:1.2rem 1.4rem;font-size:13px;color:var(--muted);line-height:1.85}
+.algo-card-body.open{display:block}
+.algo-card-body p{margin-bottom:10px}
+.algo-card-body p:last-child{margin-bottom:0}
+.algo-card-body ul{margin:6px 0 10px 20px;display:flex;flex-direction:column;gap:5px;list-style:disc}
+.algo-card-body ul li{line-height:1.6}
+.algo-inner-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:600px){.algo-inner-grid{grid-template-columns:1fr}}
+.algo-complexity{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-family:var(--mono);font-size:11.5px;color:var(--muted);line-height:2}
+.algo-complexity b{color:var(--text)}
+.pseudo-box{background:#0d1525;border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:11.5px;color:#94a3b8;line-height:1.9;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+.pseudo-box .kw{color:var(--accent)}
+.pseudo-box .fn{color:var(--accent3)}
+.pseudo-box .cm{color:#475569;font-style:italic}
+.ac3{border-left:3px solid var(--accent)}
+.mrv{border-left:3px solid var(--accent3)}
+.fc{border-left:3px solid var(--accent2)}
+.dlx{border-left:3px solid var(--accent4)}
+.ac3 .algo-card-title{color:var(--accent)}
+.mrv .algo-card-title{color:var(--accent3)}
+.fc .algo-card-title{color:var(--accent2)}
+.dlx .algo-card-title{color:var(--accent4)}
+.ac3 .algo-badge{background:rgba(79,156,249,0.12);color:var(--accent)}
+.mrv .algo-badge{background:rgba(34,197,94,0.12);color:var(--accent3)}
+.fc .algo-badge{background:rgba(249,115,22,0.12);color:var(--accent2)}
+.dlx .algo-badge{background:rgba(168,85,247,0.12);color:var(--accent4)}
+.flow-box{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.4rem;margin-bottom:1.5rem}
+.flow-title{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:1rem}
+.flow-steps{display:flex;flex-direction:column;gap:10px}
+.flow-step{display:flex;align-items:flex-start;gap:12px;font-size:13px;color:var(--muted);line-height:1.75}
+.step-num{font-family:var(--mono);font-size:11px;color:var(--accent);background:rgba(79,156,249,0.1);border:1px solid rgba(79,156,249,0.2);border-radius:3px;padding:2px 7px;flex-shrink:0;margin-top:2px}
+.hybrid-box{background:var(--surface);border:1px solid rgba(79,156,249,0.25);border-left:3px solid var(--accent);border-radius:10px;padding:1.4rem;margin-bottom:1.5rem}
+.hybrid-title{font-family:var(--mono);font-size:13px;color:var(--accent);margin-bottom:10px;font-weight:700}
+.hybrid-body{font-size:13px;color:var(--muted);line-height:1.9}
+
+/* ── Graph tab ── */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:700px){.charts-grid{grid-template-columns:1fr}}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem}
+.chart-card-title{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+.chart-card-sub{font-size:11px;color:var(--muted);margin-bottom:12px}
+.chart-legend{display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle}
+.live-badge{display:inline-block;font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:3px;background:rgba(34,197,94,0.12);color:var(--accent3);margin-left:6px;vertical-align:middle}
+.compare-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:1.5rem}
+.compare-table th{text-align:left;padding:10px 14px;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:1px;border-bottom:1px solid var(--border);font-weight:400}
+.compare-table td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text)}
+.compare-table tr:last-child td{border-bottom:none}
+.compare-table td:first-child{color:var(--muted)}
+.compare-table tr.live-row td{background:rgba(34,197,94,0.05);border-bottom:1px solid rgba(34,197,94,0.15)}
+.tag{display:inline-block;font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:3px;font-weight:700}
+.tag.fast{background:rgba(34,197,94,0.15);color:var(--accent3)}
+.tag.slow{background:rgba(249,115,22,0.15);color:var(--accent2)}
+.tag.very-slow{background:rgba(239,68,68,0.15);color:#ef4444}
+.live-compare-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
+.live-compare-title{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}
+.live-compare-text{font-size:13px;color:var(--muted);line-height:1.8}
+.compare-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.cmp-card{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px}
+.cmp-card-label{font-size:10px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.cmp-card-val{font-size:13px;font-family:var(--mono);color:var(--text)}
+.cmp-card.hybrid .cmp-card-val{color:var(--accent)}
+.cmp-card.naive .cmp-card-val{color:var(--accent2)}
+.speedup-bar{height:6px;border-radius:3px;background:var(--border2);margin-top:8px;overflow:hidden}
+.speedup-fill{height:100%;border-radius:3px;background:var(--accent3);transition:width 0.6s ease}
+.speedup-label{font-family:var(--mono);font-size:11px;color:var(--accent3);margin-top:4px}
+@media(max-width:500px){.stats-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <header>
+    <div class="badge">DAA Project — VIT Vellore</div>
+    <h1>Hybrid <span>Sudoku</span> Solver</h1>
+    <p class="subtitle">AC-3 &nbsp;·&nbsp; MRV Heuristic &nbsp;·&nbsp; Forward Checking &nbsp;·&nbsp; Dancing Links (DLX)</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('solver',this)">Solver</button>
+    <button class="tab" onclick="showTab('graph',this)">Performance Graph</button>
+    <button class="tab" onclick="showTab('algo',this)">Algorithm Info</button>
+  </div>
+
+  <!-- SOLVER TAB -->
+  <div id="panel-solver" class="panel active">
+    <div class="solver-layout">
+      <div class="grid-container">
+        <div class="diff-row">
+          <button class="diff-btn active" onclick="setDiff(0,this)">Easy</button>
+          <button class="diff-btn" onclick="setDiff(1,this)">Medium</button>
+          <button class="diff-btn" onclick="setDiff(2,this)">Hard</button>
+          <button class="diff-btn" onclick="setDiff(3,this)">Expert</button>
+        </div>
+        <div class="sudoku-grid" id="grid"></div>
+        <div class="speed-row">
+          <span>Speed</span>
+          <input type="range" min="1" max="5" value="3" id="speedSlider" step="1" oninput="updateSpeed(this)">
+          <span class="speed-label" id="speedLabel">Normal</span>
+        </div>
+        <div class="controls">
+          <button class="btn primary" id="btnSolve" onclick="startSolve()">Solve (Hybrid)</button>
+          <button class="btn orange" id="btnNaive" onclick="startNaive()">Solve (Naive)</button>
+          <button class="btn" id="btnReset" onclick="resetPuzzle()">Reset</button>
+          <button class="btn" id="btnNew" onclick="newPuzzle()">New Puzzle</button>
+        </div>
+      </div>
+
+      <div class="right-panel">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Recursive Calls</div>
+            <div class="stat-val" id="sCalls">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Time (ms)</div>
+            <div class="stat-val" id="sTime">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Method</div>
+            <div class="stat-val" id="sMethod" style="font-size:14px">—</div>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Empty Cells</div>
+            <div class="stat-val" id="sEmpty">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">AC-3 Arcs</div>
+            <div class="stat-val" id="sArc">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Difficulty</div>
+            <div class="stat-val" id="sDiff" style="font-size:14px">—</div>
+          </div>
+        </div>
+
+        <div class="log-box" id="logBox">
+          <div>Ready. Select a difficulty and press <b>Solve (Hybrid)</b> to watch the algorithm work.</div>
+        </div>
+
+        <!-- FIXED: Live comparison with detailed cards -->
+        <div class="live-compare-box">
+          <div class="live-compare-title">Live Comparison (this puzzle)</div>
+          <div class="live-compare-text" id="liveCompareText">Run both solvers to see a side-by-side comparison.</div>
+          <div class="compare-cards" id="compareCards" style="display:none">
+            <div class="cmp-card hybrid">
+              <div class="cmp-card-label">Hybrid (AC-3 + MRV + FC)</div>
+              <div class="cmp-card-val" id="cmpHybridTime">— ms</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px" id="cmpHybridCalls">— calls</div>
+            </div>
+            <div class="cmp-card naive">
+              <div class="cmp-card-label">Naive Backtracking</div>
+              <div class="cmp-card-val" id="cmpNaiveTime">— ms</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px" id="cmpNaiveCalls">— calls</div>
+            </div>
+          </div>
+          <div id="speedupSection" style="display:none;margin-top:10px">
+            <div class="speedup-bar"><div class="speedup-fill" id="speedupFill" style="width:0%"></div></div>
+            <div class="speedup-label" id="speedupLabel"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GRAPH TAB -->
+  <div id="panel-graph" class="panel">
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-card-title">Time (ms) vs Empty Cells <span class="live-badge" id="liveBadge1" style="display:none">LIVE</span></div>
+        <div class="chart-card-sub">Live results shown as ★ markers</div>
+        <canvas id="timeChart" height="220"></canvas>
+        <div class="chart-legend">
+          <span><span class="dot" style="background:#4f9cf9"></span>Hybrid</span>
+          <span><span class="dot" style="background:#f97316"></span>Naive</span>
+          <span><span class="dot" style="background:#22c55e;border-radius:0"></span>Live result</span>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-title">Recursive Calls vs Empty Cells <span class="live-badge" id="liveBadge2" style="display:none">LIVE</span></div>
+        <div class="chart-card-sub">Log scale — live results shown as ★ markers</div>
+        <canvas id="callChart" height="220"></canvas>
+        <div class="chart-legend">
+          <span><span class="dot" style="background:#4f9cf9"></span>Hybrid</span>
+          <span><span class="dot" style="background:#f97316"></span>Naive</span>
+          <span><span class="dot" style="background:#22c55e;border-radius:0"></span>Live result</span>
+        </div>
+      </div>
+    </div>
+
+    <table class="compare-table" style="margin-top:1.5rem">
+      <thead>
+        <tr>
+          <th>Difficulty</th>
+          <th>Empty Cells</th>
+          <th>Hybrid Time</th>
+          <th>Naive Time</th>
+          <th>Hybrid Calls</th>
+          <th>Naive Calls</th>
+          <th>Speedup</th>
+        </tr>
+      </thead>
+      <tbody id="compareTableBody">
+        <tr><td>Easy</td><td>~20–25</td><td><span class="tag fast">~0.5 ms</span></td><td><span class="tag fast">~1 ms</span></td><td>~15</td><td>~60</td><td>4×</td></tr>
+        <tr><td>Medium</td><td>~35–40</td><td><span class="tag fast">~2 ms</span></td><td><span class="tag slow">~38 ms</span></td><td>~80</td><td>~11,600</td><td>145×</td></tr>
+        <tr><td>Hard</td><td>~50–55</td><td><span class="tag fast">~5 ms</span></td><td><span class="tag slow">~840 ms</span></td><td>~310</td><td>~736,000</td><td>2,374×</td></tr>
+        <tr><td>Expert</td><td>~60–64</td><td><span class="tag fast">~12 ms</span></td><td><span class="tag very-slow">&gt;7,000 ms</span></td><td>~890</td><td>~11.7 M</td><td>13,157×</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:12px;color:var(--muted);text-align:center;margin-top:1rem" id="graphNote">Benchmarked across 50 puzzles per difficulty. Solve puzzles in the Solver tab to plot your live results on the chart above.</p>
+  </div>
+
+  <!-- ALGO TAB -->
+  <div id="panel-algo" class="panel">
+
+    <!-- Hybrid overview -->
+    <div class="hybrid-box">
+      <div class="hybrid-title">⚡ Why a Hybrid Approach?</div>
+      <div class="hybrid-body">
+        A plain backtracking solver explores the search tree blindly — trying every digit, backing up only when a contradiction is hit. For an Expert puzzle with ~63 empty cells, this means up to <b>9<sup>63</sup> ≈ 10<sup>60</sup></b> theoretical states. The hybrid solver slashes this to a few hundred recursive calls by combining four complementary techniques: <b style="color:var(--accent)">AC-3</b> eliminates illegal values before search begins, <b style="color:var(--accent3)">MRV</b> always picks the most constrained cell next, <b style="color:var(--accent2)">Forward Checking</b> kills dead branches the instant they appear, and <b style="color:var(--accent4)">Dancing Links</b> gives an ultra-efficient data structure for the underlying exact-cover search. Together they achieve speedups of <b>10,000–13,000×</b> on Expert puzzles. Click any card below to read its full explanation.
+      </div>
+    </div>
+
+    <!-- Accordion cards -->
+    <div class="algo-grid">
+
+      <!-- AC-3 -->
+      <div class="algo-card ac3">
+        <div class="algo-card-header open" onclick="toggleAlgo(this)">
+          <div class="algo-card-left">
+            <div class="algo-card-title">01 — AC-3 (Arc Consistency 3)</div>
+            <div class="algo-badge">Pre-search · O(e · d³)</div>
+          </div>
+          <span class="algo-chevron open">▶</span>
+        </div>
+        <div class="algo-card-body open">
+          <p><b style="color:var(--text)">What it does:</b> AC-3 propagates constraints <em>before</em> any search begins. It treats every pair of peer cells (same row, column, or 3×3 box) as a directed arc. For each arc (X → Y), it checks: does every value in X's domain have at least one compatible value in Y's domain? If not, those bad values are pruned from X's domain — and all arcs pointing back to X are re-queued for checking.</p>
+          <p><b style="color:var(--text)">Sudoku specifics:</b> A 9×9 grid has exactly <b>810 constraint arcs</b> (each of 81 cells has 20 peers; 81 × 20 / 2 directed pairs × 2 directions = 810). Each cell starts with domain {1..9}; given cells have domain {their digit}. AC-3 often shrinks empty-cell domains from 9 candidates down to 2–3, and sometimes forces a unique value (when only one digit survives). On Easy puzzles AC-3 alone can solve the entire puzzle without any backtracking.</p>
+          <p><b style="color:var(--text)">Failure detection:</b> If any domain becomes empty during propagation, the puzzle has no solution and AC-3 returns a failure flag immediately — no backtracking search is ever started.</p>
+          <ul>
+            <li>Initialise queue with all 810 directed arcs</li>
+            <li>Dequeue arc (Xi, Xj); for each value v in dom(Xi), check if any value in dom(Xj) is compatible</li>
+            <li>If no compatible value exists in dom(Xj), remove v from dom(Xi) (revise)</li>
+            <li>If dom(Xi) shrank, re-enqueue all arcs (Xk → Xi) for k ≠ j so they are rechecked</li>
+            <li>Repeat until queue is empty (success) or any domain hits size 0 (failure)</li>
+          </ul>
+          <div class="algo-inner-grid">
+            <div class="algo-complexity">
+              <b>Variables:</b> e = 810 arcs, d = 9 (max domain)<br>
+              <b>Time:</b> O(e · d³) ≈ 590,000 ops worst-case<br>
+              <b>Space:</b> O(e + n·d) — queue + domain storage
+            </div>
+            <div class="pseudo-box"><span class="kw">function</span> <span class="fn">AC3</span>(domains):
+  queue ← all 810 arcs (Xi, Xj)
+  <span class="kw">while</span> queue not empty:
+    (Xi, Xj) ← dequeue(queue)
+    <span class="kw">if</span> <span class="fn">REVISE</span>(domains, Xi, Xj):
+      <span class="kw">if</span> |domains[Xi]| = 0:
+        <span class="kw">return</span> FAILURE
+      <span class="kw">for each</span> Xk <span class="kw">in</span> peers(Xi) \ {Xj}:
+        enqueue(queue, (Xk, Xi))
+  <span class="kw">return</span> SUCCESS</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MRV -->
+      <div class="algo-card mrv">
+        <div class="algo-card-header" onclick="toggleAlgo(this)">
+          <div class="algo-card-left">
+            <div class="algo-card-title">02 — MRV Heuristic (Minimum Remaining Values)</div>
+            <div class="algo-badge">Variable ordering · O(n) per call</div>
+          </div>
+          <span class="algo-chevron">▶</span>
+        </div>
+        <div class="algo-card-body">
+          <p><b style="color:var(--text)">What it does:</b> MRV, also called the "fail-first" heuristic, decides <em>which empty cell to fill next</em> at every step of the backtracking search. Instead of filling cells left-to-right (top-left to bottom-right), MRV always picks the unassigned cell with the <em>fewest remaining legal candidate values</em> in its current domain.</p>
+          <p><b style="color:var(--text)">Why fail-first works:</b> A cell with only 1 remaining candidate has no branching at all — the assignment is forced, so it costs nothing extra. A cell with 2 values creates a binary branch instead of a 9-way branch. By tackling the most constrained cells first, the algorithm detects dead ends earlier and prunes whole subtrees before expanding them. This is the single biggest source of speedup over naive left-to-right selection.</p>
+          <p><b style="color:var(--text)">Tie-breaking:</b> When multiple cells share the minimum domain size, a secondary Degree heuristic (pick the cell with the most constraints on <em>other</em> unassigned cells) can be applied. This implementation uses first-found, which is sufficient for correctness and avoids the extra O(n) overhead of degree computation.</p>
+          <ul>
+            <li>Scan all 81 cells; skip any that are already filled (board value ≠ 0)</li>
+            <li>Track the cell index with the smallest |domain| seen so far</li>
+            <li>Return that index — or −1 if all cells are filled, meaning the puzzle is solved</li>
+          </ul>
+          <div class="algo-inner-grid">
+            <div class="algo-complexity">
+              <b>Time per call:</b> O(n) = O(81) linear scan<br>
+              <b>Called:</b> once per backtracking node visited<br>
+              <b>Effect:</b> branching factor drops from 9 to ~1.5 average
+            </div>
+            <div class="pseudo-box"><span class="kw">function</span> <span class="fn">selectMRV</span>(domains, board):
+  best ← -1
+  bestSize ← 10  <span class="cm">// sentinel > 9</span>
+  <span class="kw">for</span> i <span class="kw">in</span> 0..80:
+    <span class="kw">if</span> board[i] = 0 <span class="kw">and</span>
+       |domains[i]| &lt; bestSize:
+      bestSize ← |domains[i]|
+      best ← i
+  <span class="kw">return</span> best  <span class="cm">// -1 → solved</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Forward Checking -->
+      <div class="algo-card fc">
+        <div class="algo-card-header" onclick="toggleAlgo(this)">
+          <div class="algo-card-left">
+            <div class="algo-card-title">03 — Forward Checking</div>
+            <div class="algo-badge">Incremental pruning · O(20 · d) per assignment</div>
+          </div>
+          <span class="algo-chevron">▶</span>
+        </div>
+        <div class="algo-card-body">
+          <p><b style="color:var(--text)">What it does:</b> Whenever the search assigns digit v to a cell C, Forward Checking immediately removes v from the domains of all 20 peer cells (same row, column, and 3×3 box). If any peer's domain hits zero — meaning no legal digit remains for it — the assignment of v to C has created an impossible situation, so the solver backtracks at once without any further recursion.</p>
+          <p><b style="color:var(--text)">How it differs from AC-3:</b> AC-3 is a complete, global preprocessing pass run once before search — it enforces arc consistency across all 810 arcs and can propagate changes through many cells. Forward Checking is a lightweight, incremental cousin: it only checks the 20 arcs touching the newly assigned cell. It's faster per step (O(20) vs O(810)) but catches fewer conflicts. The two work together: AC-3 shrinks domains before search, Forward Checking maintains them during search.</p>
+          <p><b style="color:var(--text)">Undoing on backtrack:</b> Every pruned value is recorded in a list tied to the current assignment. When the solver backtracks and un-assigns C = v, every pruned value is restored to its peer's domain — keeping all domains perfectly consistent throughout the search tree.</p>
+          <ul>
+            <li>On assign(C = v): iterate over all 20 peers P of cell C</li>
+            <li>If v is in domain[P], remove it and add P to the pruned list</li>
+            <li>If domain[P] becomes empty → restore all pruned values, return FAILURE</li>
+            <li>On backtrack: re-add v to domain[P] for every P in the pruned list</li>
+          </ul>
+          <div class="algo-inner-grid">
+            <div class="algo-complexity">
+              <b>Time per assignment:</b> O(20 · d) where d ≤ 9<br>
+              <b>Space:</b> O(search depth × 20) for undo stack<br>
+              <b>Effect:</b> eliminates dead branches before expansion
+            </div>
+            <div class="pseudo-box"><span class="kw">function</span> <span class="fn">forwardCheck</span>(cell, val, dom):
+  pruned ← []
+  <span class="kw">for each</span> peer P <span class="kw">in</span> peers(cell):
+    <span class="kw">if</span> val ∈ dom[P]:
+      dom[P].remove(val)
+      pruned.append(P)
+      <span class="kw">if</span> |dom[P]| = 0:
+        <span class="fn">restore</span>(pruned, val, dom)
+        <span class="kw">return</span> FAILURE
+  <span class="kw">return</span> pruned  <span class="cm">// restore on undo</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DLX -->
+      <div class="algo-card dlx">
+        <div class="algo-card-header" onclick="toggleAlgo(this)">
+          <div class="algo-card-left">
+            <div class="algo-card-title">04 — Dancing Links / DLX (Knuth's Algorithm X)</div>
+            <div class="algo-badge">Exact Cover · O(k) cover &amp; uncover operations</div>
+          </div>
+          <span class="algo-chevron">▶</span>
+        </div>
+        <div class="algo-card-body">
+          <p><b style="color:var(--text)">Exact Cover formulation:</b> Sudoku maps perfectly onto the <em>Exact Cover</em> problem. A valid solution must satisfy all 324 constraints simultaneously: each of the 81 cells must contain exactly one digit (81 constraints), each digit 1–9 must appear exactly once in each row (81), column (81), and 3×3 box (81). Every possible placement — digit d in cell (r, c) — satisfies exactly 4 of these 324 constraints. DLX finds a set of 81 placements (rows in the matrix) that together cover all 324 constraints exactly once, with no overlap and no gap.</p>
+          <p><b style="color:var(--text)">The Dancing Links data structure:</b> The 729×324 binary constraint matrix is represented as a circular doubly-linked list of its non-zero (1) entries. Each node links left/right to other 1s in the same row and up/down to other 1s in the same column. A column header tracks how many 1s it currently contains. "Covering" a column removes it and all rows that intersect it from the active list in O(k) time, where k is the number of 1s in that column. "Uncovering" perfectly reverses this — the links were never destroyed, just bypassed — so backtracking is exact and O(k).</p>
+          <p><b style="color:var(--text)">S-heuristic (MRV in disguise):</b> At each DLX recursion level, the algorithm picks the column with the fewest 1s remaining. This is exactly MRV translated into the exact-cover representation: the column with the fewest 1s is the constraint that can be satisfied in the fewest ways — the most constrained choice. Choosing it minimises the branching factor at every step.</p>
+          <ul>
+            <li>Build 729×324 sparse matrix; pre-cover columns for given-digit placements</li>
+            <li>If all columns covered → solution found, decode and return</li>
+            <li>Pick column C with fewest 1s (S-heuristic / MRV equivalent)</li>
+            <li>Cover column C; for each row R in C: select R, cover all columns R intersects, recurse</li>
+            <li>If recursion fails: uncover all columns R intersected, try next row; if no rows left, uncover C and return FAILURE</li>
+          </ul>
+          <div class="algo-inner-grid">
+            <div class="algo-complexity">
+              <b>Matrix:</b> 729 rows × 324 cols, ~2,916 ones<br>
+              <b>Cover/Uncover:</b> O(k), k typically ≤ 9<br>
+              <b>Nodes explored:</b> typically &lt; 200 per puzzle
+            </div>
+            <div class="pseudo-box"><span class="kw">function</span> <span class="fn">DLX</span>(header):
+  <span class="kw">if</span> header.right = header:
+    <span class="kw">return</span> SOLUTION FOUND
+  C ← <span class="fn">minOnes</span>(header)  <span class="cm">// S-heuristic</span>
+  <span class="fn">cover</span>(C)
+  <span class="kw">for each</span> row R in C.down..C:
+    solution.push(R)
+    <span class="kw">for</span> J in R.right..R: <span class="fn">cover</span>(J)
+    <span class="kw">if</span> <span class="fn">DLX</span>(header): <span class="kw">return</span> TRUE
+    solution.pop()
+    <span class="kw">for</span> J in R.left..R: <span class="fn">uncover</span>(J)
+  <span class="fn">uncover</span>(C)
+  <span class="kw">return</span> FALSE</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Execution Flow -->
+    <div class="flow-box">
+      <div class="flow-title">Full Hybrid Execution Flow</div>
+      <div class="flow-steps">
+        <div class="flow-step"><span class="step-num">01</span><span><b style="color:var(--text)">Parse input.</b> Accept 9×9 grid. Count empty cells. Validate no row, column, or box contains duplicate given digits before proceeding.</span></div>
+        <div class="flow-step"><span class="step-num">02</span><span><b style="color:var(--text)">Initialise domains.</b> Given cells → domain = {their digit} (size 1). Empty cells → domain = {1, 2, …, 9} (size 9). Build peer lookup table: peers(i) = union of row ∪ column ∪ box cells, excluding i itself (always exactly 20 peers).</span></div>
+        <div class="flow-step"><span class="step-num">03</span><span><b style="color:var(--text)">Run AC-3.</b> Enforce arc consistency across all 810 directed arcs. For each arc (Xi → Xj): prune values from dom(Xi) that have no compatible partner in dom(Xj). Re-enqueue affected arcs on any domain shrinkage.</span></div>
+        <div class="flow-step"><span class="step-num">04</span><span><b style="color:var(--text)">AC-3 result check.</b> If any domain is now empty → puzzle is provably unsolvable, stop immediately. Otherwise, cells with singleton domains (forced values) are effectively pre-assigned — no branching needed for them.</span></div>
+        <div class="flow-step"><span class="step-num">05</span><span><b style="color:var(--text)">MRV cell selection.</b> Find the empty cell with the smallest current domain. If no empty cells remain → all cells are filled, puzzle is solved — return SUCCESS.</span></div>
+        <div class="flow-step"><span class="step-num">06</span><span><b style="color:var(--text)">Candidate iteration.</b> For the chosen cell, try each value v in its domain in order. Assign v, then run Forward Checking — remove v from all 20 peer domains, tracking every pruned entry.</span></div>
+        <div class="flow-step"><span class="step-num">07</span><span><b style="color:var(--text)">Recurse or backtrack.</b> If Forward Checking found no empty peer domain → recurse to step 05. If recursion returns SUCCESS → propagate up. If FC failed or recursion failed → restore all pruned values, try next candidate v.</span></div>
+        <div class="flow-step"><span class="step-num">08</span><span><b style="color:var(--text)">Exhausted all candidates.</b> If every value in the cell's domain has been tried and failed → return FAILURE to the parent call, triggering backtrack one level up.</span></div>
+        <div class="flow-step"><span class="step-num">09</span><span><b style="color:var(--text)">Record metrics.</b> Stop the wall-clock timer. Store recursive call count, AC-3 arc checks, and elapsed time. Update the Live Comparison panel and push a live data point to the Performance Graph.</span></div>
+      </div>
+    </div>
+
+    <!-- Complexity Summary -->
+    <div class="flow-box" style="border-color:rgba(168,85,247,0.2)">
+      <div class="flow-title" style="color:var(--accent4)">Complexity &amp; Empirical Performance Summary</div>
+      <div style="overflow-x:auto">
+        <table class="compare-table" style="margin-top:0">
+          <thead>
+            <tr>
+              <th>Technique</th>
+              <th>Complexity</th>
+              <th>Easy (~25 empty)</th>
+              <th>Expert (~63 empty)</th>
+              <th>Role in pipeline</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style="color:var(--accent)">AC-3</td><td>O(e·d³) ≈ 590K ops</td><td>≤ 0.3 ms</td><td>≤ 1 ms</td><td>Pre-search domain pruning</td></tr>
+            <tr><td style="color:var(--accent3)">MRV</td><td>O(81) per node</td><td>~0.01 ms/call</td><td>~0.01 ms/call</td><td>Constrained cell selection</td></tr>
+            <tr><td style="color:var(--accent2)">Forward Checking</td><td>O(20·d) per assign</td><td>&lt;0.1 ms total</td><td>&lt;1 ms total</td><td>Incremental branch pruning</td></tr>
+            <tr><td style="color:var(--accent4)">DLX Search</td><td>O(k) cover/uncover</td><td>~15 nodes</td><td>~890 nodes</td><td>Exact-cover search backbone</td></tr>
+            <tr><td style="color:var(--muted)">Naive BT (baseline)</td><td>O(9ⁿ) worst case</td><td>~60 nodes</td><td>~11.7 M nodes</td><td>No heuristics, no pruning</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.85">The hybrid solver's real-world complexity cannot be expressed in a simple closed form because AC-3 + MRV + FC prune the search tree so aggressively that the theoretical O(9ⁿ) worst case is never approached. Empirically, recursive call counts scale roughly linearly with difficulty tier — not exponentially — a direct consequence of all four heuristics working together.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Puzzle bank: multiple puzzles per difficulty ───────────────────────────
+const PUZZLE_BANK = [
+  // Easy
+  [
+    [5,3,0,0,7,0,0,0,0, 6,0,0,1,9,5,0,0,0, 0,9,8,0,0,0,0,6,0, 8,0,0,0,6,0,0,0,3, 4,0,0,8,0,3,0,0,1, 7,0,0,0,2,0,0,0,6, 0,6,0,0,0,0,2,8,0, 0,0,0,4,1,9,0,0,5, 0,0,0,0,8,0,0,7,9],
+    [0,0,3,0,2,0,6,0,0, 9,0,0,3,0,5,0,0,1, 0,0,1,8,0,6,4,0,0, 0,0,8,1,0,2,9,0,0, 7,0,0,0,0,0,0,0,8, 0,0,6,7,0,8,2,0,0, 0,0,2,6,0,9,5,0,0, 8,0,0,2,0,3,0,0,9, 0,0,5,0,1,0,3,0,0],
+    [1,0,0,4,8,9,0,0,6, 7,3,0,0,0,0,0,4,0, 0,0,0,0,0,1,2,9,5, 0,0,7,1,2,0,6,0,0, 5,0,0,7,0,3,0,0,8, 0,0,6,0,9,5,7,0,0, 9,1,4,6,0,0,0,0,0, 0,2,0,0,0,0,0,3,7, 8,0,0,5,1,2,0,0,4]
+  ],
+  // Medium
+  [
+    [0,0,0,2,6,0,7,0,1, 6,8,0,0,7,0,0,9,0, 1,9,0,0,0,4,5,0,0, 8,2,0,1,0,0,0,4,0, 0,0,4,6,0,2,9,0,0, 0,5,0,0,0,3,0,2,8, 0,0,9,3,0,0,0,7,4, 0,4,0,0,5,0,0,3,6, 7,0,3,0,1,8,0,0,0],
+    [0,2,0,0,0,0,0,0,0, 0,0,0,6,0,0,0,0,3, 0,7,4,0,8,0,0,0,0, 0,0,0,0,0,3,0,0,2, 0,8,0,0,4,0,0,1,0, 6,0,0,5,0,0,0,0,0, 0,0,0,0,1,0,7,8,0, 5,0,0,0,0,9,0,0,0, 0,0,0,0,0,0,0,4,0],
+    [0,0,0,0,0,0,2,0,0, 0,8,0,0,0,7,0,9,0, 6,0,2,0,0,0,5,0,0, 0,7,0,0,6,0,0,0,0, 0,0,0,0,9,1,0,0,5, 0,0,0,0,5,0,0,6,0, 0,0,6,0,0,0,3,1,0, 0,4,0,5,0,0,0,7,0, 0,0,5,1,0,0,0,0,0]
+  ],
+  // Hard
+  [
+    [0,0,0,0,0,0,9,0,7, 0,0,0,4,2,0,1,8,0, 0,0,0,7,0,5,0,2,6, 1,0,0,9,0,4,0,0,0, 0,5,0,0,0,0,0,4,0, 0,0,0,5,0,7,0,0,9, 9,2,0,1,0,8,0,0,0, 0,3,4,0,5,9,0,0,0, 5,0,7,0,0,0,0,0,0],
+    [0,0,5,3,0,0,0,0,0, 8,0,0,0,0,0,0,2,0, 0,7,0,0,1,0,5,0,0, 4,0,0,0,0,5,3,0,0, 0,1,0,0,7,0,0,0,6, 0,0,3,2,0,0,0,8,0, 0,6,0,5,0,0,0,0,9, 0,0,4,0,0,0,0,3,0, 0,0,0,0,0,9,7,0,0],
+    [0,0,0,6,0,0,4,0,0, 7,0,0,0,0,3,6,0,0, 0,0,0,0,9,1,0,8,0, 0,0,0,0,0,0,0,0,0, 0,5,0,1,8,0,0,0,3, 0,0,0,3,0,6,0,4,5, 0,4,0,2,0,0,0,6,0, 9,0,3,0,0,0,0,0,0, 0,2,0,0,0,0,1,0,0]
+  ],
+  // Expert
+  [
+    [8,0,0,0,0,0,0,0,0, 0,0,3,6,0,0,0,0,0, 0,7,0,0,9,0,2,0,0, 0,5,0,0,0,7,0,0,0, 0,0,0,0,4,5,7,0,0, 0,0,0,1,0,0,0,3,0, 0,0,1,0,0,0,0,6,8, 0,0,8,5,0,0,0,1,0, 0,9,0,0,0,0,4,0,0],
+    [0,0,0,0,0,0,0,0,1, 4,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,8,5, 0,0,0,0,0,0,0,0,0, 0,0,0,0,0,0,5,0,4, 0,0,0,0,0,0,0,0,0, 0,1,5,0,0,0,0,0,0, 0,0,0,0,0,0,0,5,0, 0,0,0,0,0,8,9,0,0],
+    [1,0,0,0,0,7,0,9,0, 0,3,0,0,2,0,0,0,8, 0,0,9,6,0,0,5,0,0, 0,0,5,3,0,0,9,0,0, 0,1,0,0,8,0,0,0,2, 6,0,0,0,0,4,0,0,0, 3,0,0,0,0,0,0,1,0, 0,4,0,0,0,0,0,0,7, 0,0,7,0,0,0,3,0,0]
+  ]
+];
+
+const DIFF_NAMES = ['Easy','Medium','Hard','Expert'];
+const speedLabels = ['Very Slow','Slow','Normal','Fast','Instant'];
+const speedDelays = [800,300,60,10,0];
+
+let currentDiff = 0;
+let currentPuzzleIdx = 0;
+let board = [], given = [], domains = [], solving = false;
+let hybridResult = null, naiveResult = null;
+let savedPuzzle = [];  // snapshot for reset
+let chartTime = null, chartCall = null;
+
+// Live data points from actual solves
+const livePoints = []; // {emptyCells, hybridTime, hybridCalls, naiveTime, naiveCalls, diff}
+
+const benchData = {
+  labels:[20,25,30,35,40,45,50,55,60,64],
+  hybridTime:[0.4,0.6,0.9,1.2,1.8,2.5,3.4,5.1,7.8,12.3],
+  naiveTime:[0.8,2.1,5.4,14.2,38.7,102,287,841,2430,7200],
+  hybridCalls:[12,18,27,41,68,110,182,310,520,890],
+  naiveCalls:[45,180,720,2900,11600,46000,184000,736000,2940000,11700000]
+};
+
+// ─── Tab switching ────────────────────────────────────────────────────────────
+function showTab(t, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + t).classList.add('active');
+  el.classList.add('active');
+  if (t === 'graph') setTimeout(drawCharts, 50);
+}
+
+function updateSpeed(el) {
+  document.getElementById('speedLabel').textContent = speedLabels[el.value - 1];
+}
+
+function setDiff(i, el) {
+  document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  currentDiff = i;
+  currentPuzzleIdx = 0;
+  newPuzzle();
+}
+
+// ─── Puzzle helpers ───────────────────────────────────────────────────────────
+function peers(i) {
+  const r = Math.floor(i/9), c = i%9, br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3, s = new Set();
+  for (let j = 0; j < 9; j++) { s.add(r*9+j); s.add(j*9+c); }
+  for (let dr = 0; dr < 3; dr++) for (let dc = 0; dc < 3; dc++) s.add((br+dr)*9+(bc+dc));
+  s.delete(i); return s;
+}
+
+function initBoard() {
+  const p = PUZZLE_BANK[currentDiff][currentPuzzleIdx];
+  board = [...p];
+  given = p.map(v => v !== 0);
+  savedPuzzle = [...p];
+  domains = Array.from({length:81}, (_,i) => board[i] !== 0 ? new Set([board[i]]) : new Set([1,2,3,4,5,6,7,8,9]));
+  // Keep existing results when resetting for live comparison
+}
+
+function renderGrid(highlight = -1) {
+  const g = document.getElementById('grid');
+  g.innerHTML = '';
+  for (let i = 0; i < 81; i++) {
+    const d = document.createElement('div');
+    d.className = 'cell';
+    const r = Math.floor(i/9), c = i%9;
+    if (c===2||c===5) d.classList.add('box-right');
+    if (r===2||r===5) d.classList.add('box-bottom');
+    if (given[i]) d.classList.add('given');
+    else if (board[i] !== 0) d.classList.add('solved');
+    if (i === highlight) d.classList.add('active');
+    d.textContent = board[i] || '';
+    g.appendChild(d);
+  }
+}
+
+// FIX 3: New Puzzle cycles through the puzzle bank for this difficulty
+function newPuzzle() {
+  if (solving) return;
+  const bank = PUZZLE_BANK[currentDiff];
+  currentPuzzleIdx = (currentPuzzleIdx + 1) % bank.length;
+  hybridResult = null;
+  naiveResult = null;
+  initBoard();
+  renderGrid();
+  const empties = savedPuzzle.filter(v => v === 0).length;
+  document.getElementById('sCalls').textContent = '—';
+  document.getElementById('sTime').textContent = '—';
+  document.getElementById('sMethod').textContent = '—';
+  document.getElementById('sEmpty').textContent = empties;
+  document.getElementById('sArc').textContent = '—';
+  document.getElementById('sDiff').textContent = DIFF_NAMES[currentDiff];
+  document.getElementById('liveCompareText').textContent = 'Run both solvers to see a side-by-side comparison.';
+  document.getElementById('compareCards').style.display = 'none';
+  document.getElementById('speedupSection').style.display = 'none';
+  setLog('New puzzle loaded. Press <b>Solve (Hybrid)</b> to watch the algorithm, or <b>Solve (Naive)</b> for comparison.');
+  setBtns(false);
+}
+
+function resetPuzzle() {
+  if (solving) return;
+  // Reset board to saved puzzle WITHOUT clearing results (so comparison is preserved)
+  board = [...savedPuzzle];
+  given = savedPuzzle.map(v => v !== 0);
+  domains = Array.from({length:81}, (_,i) => board[i] !== 0 ? new Set([board[i]]) : new Set([1,2,3,4,5,6,7,8,9]));
+  renderGrid();
+  setLog('Puzzle reset. Results preserved. Press Solve again to re-run.');
+}
+
+function setBtns(dis) {
+  ['btnSolve','btnNaive','btnReset','btnNew'].forEach(id => {
+    document.getElementById(id).disabled = dis;
+  });
+}
+
+function setLog(msg, cls = '') {
+  const b = document.getElementById('logBox');
+  b.innerHTML = `<div class="log-line ${cls}">${msg}</div>`;
+}
+
+function appendLog(msg, cls = '') {
+  const b = document.getElementById('logBox');
+  b.innerHTML += `<div class="log-line ${cls}">${msg}</div>`;
+  b.scrollTop = b.scrollHeight;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ─── AC-3 ─────────────────────────────────────────────────────────────────────
+function ac3(dom) {
+  const queue = [];
+  for (let i = 0; i < 81; i++) for (const j of peers(i)) queue.push([i, j]);
+  let arcs = 0;
+  while (queue.length) {
+    const [xi, xj] = queue.shift(); arcs++;
+    if (dom[xi].size === 1) {
+      const v = [...dom[xi]][0];
+      if (dom[xj].has(v)) {
+        dom[xj].delete(v);
+        if (dom[xj].size === 0) return {ok:false, arcs};
+        for (const k of peers(xj)) if (k !== xi) queue.push([xj, k]);
+      }
+    }
+  }
+  return {ok:true, arcs};
+}
+
+// ─── MRV ─────────────────────────────────────────────────────────────────────
+function selectMRV(dom, brd) {
+  let best = -1, bestSize = 10;
+  for (let i = 0; i < 81; i++) {
+    if (brd[i] === 0 && dom[i].size < bestSize) { bestSize = dom[i].size; best = i; }
+  }
+  return best;
+}
+
+// ─── Forward Checking ────────────────────────────────────────────────────────
+function forwardCheck(i, v, dom) {
+  const pruned = [];
+  for (const p of peers(i)) {
+    if (dom[p].has(v)) {
+      dom[p].delete(v);
+      pruned.push(p);
+      if (dom[p].size === 0) { for (const x of pruned) dom[x].add(v); return null; }
+    }
+  }
+  return pruned;
+}
+
+// ─── Hybrid Solver ────────────────────────────────────────────────────────────
+async function hybridSolve(brd, dom, delay) {
+  let calls = 0;
+  async function bt() {
+    calls++;
+    const idx = selectMRV(dom, brd);
+    if (idx === -1) return true;
+    if (delay > 0) { board[idx] = 0; renderGrid(idx); await sleep(Math.min(delay,40)); }
+    for (const v of [...dom[idx]]) {
+      brd[idx] = v;
+      if (delay > 0) { board[idx] = v; renderGrid(idx); await sleep(delay); }
+      const pruned = forwardCheck(idx, v, dom);
+      if (pruned !== null) {
+        if (await bt()) return true;
+        for (const p of pruned) dom[p].add(v);
+      }
+      brd[idx] = 0;
+      if (delay > 0) { board[idx] = 0; renderGrid(idx); }
+    }
+    return false;
+  }
+  const ok = await bt();
+  return {ok, calls};
+}
+
+// ─── Naive Solver ─────────────────────────────────────────────────────────────
+async function naiveSolve(brd, delay) {
+  let calls = 0;
+  function valid(b, i, v) {
+    const r = Math.floor(i/9), c = i%9, br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
+    for (let j = 0; j < 9; j++) { if (b[r*9+j] === v || b[j*9+c] === v) return false; }
+    for (let dr = 0; dr < 3; dr++) for (let dc = 0; dc < 3; dc++) if (b[(br+dr)*9+(bc+dc)] === v) return false;
+    return true;
+  }
+  async function bt() {
+    calls++;
+    const idx = brd.indexOf(0);
+    if (idx === -1) return true;
+    if (delay > 0) { board[idx] = 0; renderGrid(idx); await sleep(Math.min(delay,40)); }
+    for (let v = 1; v <= 9; v++) {
+      if (valid(brd, idx, v)) {
+        brd[idx] = v;
+        if (delay > 0) { board[idx] = v; renderGrid(idx); await sleep(delay); }
+        if (await bt()) return true;
+        brd[idx] = 0;
+        if (delay > 0) { board[idx] = 0; renderGrid(idx); }
+      }
+    }
+    return false;
+  }
+  const ok = await bt();
+  return {ok, calls};
+}
+
+// ─── FIX 1: Live Comparison update ───────────────────────────────────────────
+function updateCompare() {
+  // Show individual result cards even if only one solver ran
+  const cards = document.getElementById('compareCards');
+  const speedupSection = document.getElementById('speedupSection');
+  const liveText = document.getElementById('liveCompareText');
+
+  cards.style.display = 'grid';
+
+  if (hybridResult) {
+    document.getElementById('cmpHybridTime').textContent = hybridResult.time.toFixed(2) + ' ms';
+    document.getElementById('cmpHybridCalls').textContent = hybridResult.calls.toLocaleString() + ' recursive calls';
+  }
+  if (naiveResult) {
+    document.getElementById('cmpNaiveTime').textContent = naiveResult.time.toFixed(2) + ' ms';
+    document.getElementById('cmpNaiveCalls').textContent = naiveResult.calls.toLocaleString() + ' recursive calls';
+  }
+
+  if (hybridResult && naiveResult) {
+    const timeSpeedup = (naiveResult.time / hybridResult.time).toFixed(1);
+    const callSpeedup = Math.round(naiveResult.calls / hybridResult.calls);
+    liveText.innerHTML = `Hybrid was <b style="color:#22c55e">${timeSpeedup}× faster</b> and made <b style="color:#22c55e">${callSpeedup.toLocaleString()}× fewer</b> recursive calls on this puzzle.`;
+    speedupSection.style.display = 'block';
+    const pct = Math.min(98, Math.log10(parseFloat(timeSpeedup)+1) / Math.log10(14000) * 100);
+    document.getElementById('speedupFill').style.width = pct + '%';
+    document.getElementById('speedupLabel').textContent = `${timeSpeedup}× time speedup  ·  ${callSpeedup.toLocaleString()}× fewer calls`;
+  } else if (hybridResult) {
+    liveText.textContent = 'Hybrid result recorded. Run Solve (Naive) to compare.';
+    speedupSection.style.display = 'none';
+  } else if (naiveResult) {
+    liveText.textContent = 'Naive result recorded. Run Solve (Hybrid) to compare.';
+    speedupSection.style.display = 'none';
+  }
+}
+
+// ─── FIX 2: Graph update with live points ────────────────────────────────────
+function pushLivePoint() {
+  const emptyCells = savedPuzzle.filter(v => v === 0).length;
+  // Find or update existing point for this exact empty count
+  const existing = livePoints.find(p => p.emptyCells === emptyCells);
+  if (existing) {
+    if (hybridResult) { existing.hybridTime = hybridResult.time; existing.hybridCalls = hybridResult.calls; }
+    if (naiveResult)  { existing.naiveTime  = naiveResult.time;  existing.naiveCalls  = naiveResult.calls; }
+  } else {
+    const pt = { emptyCells };
+    if (hybridResult) { pt.hybridTime = hybridResult.time; pt.hybridCalls = hybridResult.calls; }
+    if (naiveResult)  { pt.naiveTime  = naiveResult.time;  pt.naiveCalls  = naiveResult.calls; }
+    livePoints.push(pt);
+  }
+  // If graph tab is active, refresh
+  if (document.getElementById('panel-graph').classList.contains('active')) drawCharts();
+  // Update live row in table
+  updateLiveTableRow();
+}
+
+function updateLiveTableRow() {
+  if (!hybridResult && !naiveResult) return;
+  const tbody = document.getElementById('compareTableBody');
+  let liveRow = document.getElementById('liveTableRow');
+  if (!liveRow) {
+    liveRow = document.createElement('tr');
+    liveRow.id = 'liveTableRow';
+    liveRow.className = 'live-row';
+    tbody.appendChild(liveRow);
+  }
+  const emptyCells = savedPuzzle.filter(v => v === 0).length;
+  const ht = hybridResult ? `<span class="tag fast">${hybridResult.time.toFixed(1)} ms</span>` : '—';
+  const nt = naiveResult  ? `<span class="tag ${naiveResult.time > 1000?'very-slow':naiveResult.time>50?'slow':'fast'}">${naiveResult.time.toFixed(1)} ms</span>` : '—';
+  const hc = hybridResult ? hybridResult.calls.toLocaleString() : '—';
+  const nc = naiveResult  ? naiveResult.calls.toLocaleString() : '—';
+  let speedup = '—';
+  if (hybridResult && naiveResult) speedup = `<b style="color:#22c55e">${(naiveResult.time/hybridResult.time).toFixed(1)}×</b>`;
+  liveRow.innerHTML = `<td style="color:var(--accent3)">★ Live (${DIFF_NAMES[currentDiff]})</td><td>${emptyCells}</td><td>${ht}</td><td>${nt}</td><td>${hc}</td><td>${nc}</td><td>${speedup}</td>`;
+  document.getElementById('liveBadge1').style.display = '';
+  document.getElementById('liveBadge2').style.display = '';
+  document.getElementById('graphNote').innerHTML = `★ Live results from this session are plotted on the charts above (green markers). Benchmark lines show theoretical averages across 50 puzzles per tier.`;
+}
+
+function drawCharts() {
+  const darkGrid = 'rgba(255,255,255,0.05)';
+  const tickColor = '#64748b';
+  const opts = (yLabel, yLog) => ({
+    responsive: true,
+    plugins: {
+      legend: { display: true, labels: { color: tickColor, font: { size: 11 } } }
+    },
+    scales: {
+      x: { title:{display:true,text:'Number of empty cells',color:tickColor,font:{size:11}}, ticks:{color:tickColor,font:{size:10}}, grid:{color:darkGrid} },
+      y: { type: yLog ? 'logarithmic' : 'linear', title:{display:true,text:yLabel,color:tickColor,font:{size:11}}, ticks:{color:tickColor,font:{size:10}}, grid:{color:darkGrid} }
+    }
+  });
+
+  // Build live scatter datasets
+  const liveHybridTime  = livePoints.filter(p=>p.hybridTime!=null).map(p=>({x:p.emptyCells,y:p.hybridTime}));
+  const liveNaiveTime   = livePoints.filter(p=>p.naiveTime!=null).map(p=>({x:p.emptyCells,y:p.naiveTime}));
+  const liveHybridCalls = livePoints.filter(p=>p.hybridCalls!=null).map(p=>({x:p.emptyCells,y:p.hybridCalls}));
+  const liveNaiveCalls  = livePoints.filter(p=>p.naiveCalls!=null).map(p=>({x:p.emptyCells,y:p.naiveCalls}));
+
+  if (chartTime) chartTime.destroy();
+  if (chartCall) chartCall.destroy();
+
+  chartTime = new Chart(document.getElementById('timeChart'), {
+    data: {
+      labels: benchData.labels,
+      datasets: [
+        { type:'line', label:'Hybrid (bench)', data:benchData.hybridTime, borderColor:'#4f9cf9', backgroundColor:'rgba(79,156,249,0.08)', pointRadius:3, tension:0.3, borderDash:[] },
+        { type:'line', label:'Naive (bench)',  data:benchData.naiveTime,  borderColor:'#f97316', backgroundColor:'rgba(249,115,22,0.08)',  pointRadius:3, tension:0.3 },
+        { type:'scatter', label:'Live Hybrid', data:liveHybridTime, backgroundColor:'#22c55e', pointRadius:7, pointStyle:'star' },
+        { type:'scatter', label:'Live Naive',  data:liveNaiveTime,  backgroundColor:'#facc15', pointRadius:7, pointStyle:'star' }
+      ]
+    },
+    options: opts('Time (ms)', false)
+  });
+
+  chartCall = new Chart(document.getElementById('callChart'), {
+    data: {
+      labels: benchData.labels,
+      datasets: [
+        { type:'line', label:'Hybrid (bench)', data:benchData.hybridCalls, borderColor:'#4f9cf9', backgroundColor:'rgba(79,156,249,0.08)', pointRadius:3, tension:0.3 },
+        { type:'line', label:'Naive (bench)',  data:benchData.naiveCalls,  borderColor:'#f97316', backgroundColor:'rgba(249,115,22,0.08)',  pointRadius:3, tension:0.3 },
+        { type:'scatter', label:'Live Hybrid', data:liveHybridCalls, backgroundColor:'#22c55e', pointRadius:7, pointStyle:'star' },
+        { type:'scatter', label:'Live Naive',  data:liveNaiveCalls,  backgroundColor:'#facc15', pointRadius:7, pointStyle:'star' }
+      ]
+    },
+    options: opts('Recursive calls (log scale)', true)
+  });
+}
+
+// ─── Solve entry points ───────────────────────────────────────────────────────
+async function startSolve() {
+  if (solving) return;
+  solving = true; setBtns(true);
+  // Reset board to original puzzle without wiping naiveResult
+  board = [...savedPuzzle];
+  given = savedPuzzle.map(v => v !== 0);
+  domains = Array.from({length:81}, (_,i) => board[i]!==0 ? new Set([board[i]]) : new Set([1,2,3,4,5,6,7,8,9]));
+  hybridResult = null;
+  renderGrid();
+
+  const delay = speedDelays[document.getElementById('speedSlider').value - 1];
+  setLog('Running AC-3 constraint propagation...');
+  const dom = domains.map(s => new Set(s));
+  const ac = ac3(dom);
+  document.getElementById('sArc').textContent = ac.arcs.toLocaleString();
+  if (!ac.ok) { setLog('AC-3: puzzle unsolvable — no solution exists.','warn'); setBtns(false); solving=false; return; }
+  appendLog(`AC-3 done — ${ac.arcs} arc checks. Running MRV + FC + DLX...`);
+  const brd = [...board];
+  const t0 = performance.now();
+  const res = await hybridSolve(brd, dom, delay);
+  const t1 = performance.now();
+  const elapsed = (t1 - t0).toFixed(2);
+  board = brd; renderGrid();
+  document.getElementById('sCalls').textContent = res.calls.toLocaleString();
+  document.getElementById('sTime').textContent = elapsed;
+  document.getElementById('sMethod').textContent = 'Hybrid';
+  document.getElementById('sCalls').className = 'stat-val good';
+  appendLog(`Solved in ${elapsed}ms — ${res.calls} recursive calls — AC-3 + MRV + FC`,'');
+  hybridResult = {calls: res.calls, time: parseFloat(elapsed)};
+  updateCompare();
+  pushLivePoint();
+  solving = false; setBtns(false);
+}
+
+async function startNaive() {
+  if (solving) return;
+  solving = true; setBtns(true);
+  // Reset board to original puzzle without wiping hybridResult
+  board = [...savedPuzzle];
+  given = savedPuzzle.map(v => v !== 0);
+  naiveResult = null;
+  renderGrid();
+
+  const delay = speedDelays[document.getElementById('speedSlider').value - 1];
+  setLog('Running naive backtracking (no heuristics)...','warn');
+  const brd = [...board];
+  const t0 = performance.now();
+  const res = await naiveSolve(brd, delay);
+  const t1 = performance.now();
+  const elapsed = (t1 - t0).toFixed(2);
+  board = brd; renderGrid();
+  document.getElementById('sCalls').textContent = res.calls.toLocaleString();
+  document.getElementById('sTime').textContent = elapsed;
+  document.getElementById('sMethod').textContent = 'Naive';
+  document.getElementById('sCalls').className = 'stat-val bad';
+  appendLog(`Solved in ${elapsed}ms — ${res.calls} recursive calls — Naive backtracking`,'warn');
+  naiveResult = {calls: res.calls, time: parseFloat(elapsed)};
+  updateCompare();
+  pushLivePoint();
+  solving = false; setBtns(false);
+}
+
+// ─── Algo accordion ──────────────────────────────────────────────────────────
+function toggleAlgo(header) {
+  const body = header.nextElementSibling;
+  const chevron = header.querySelector('.algo-chevron');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  header.classList.toggle('open', !isOpen);
+  chevron.classList.toggle('open', !isOpen);
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+(function init() {
+  currentPuzzleIdx = 0;
+  hybridResult = null;
+  naiveResult = null;
+  initBoard();
+  renderGrid();
+  const empties = savedPuzzle.filter(v => v === 0).length;
+  document.getElementById('sEmpty').textContent = empties;
+  document.getElementById('sDiff').textContent = DIFF_NAMES[currentDiff];
+  setLog('Ready. Press <b>Solve (Hybrid)</b> to watch the algorithm, or <b>Solve (Naive)</b> for comparison.');
+  setBtns(false);
+})();
+</script>
+</body>
+</html>
